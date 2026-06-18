@@ -40,65 +40,26 @@ Responsible for:
 
 ## 3. CORE DOMAIN MODEL (FINAL)
 
-### 3.1 Entities
+### 3.1 Overview
 
-#### Clinic
-* Represents a tenant (medical practice).
+The system defines six core entities:
+* **Clinic** — Tenant boundary
+* **Doctor** — Practitioner within a clinic
+* **Patient** — Client booking appointments
+* **Schedule** — Doctor availability rules
+* **Appointment** — Confirmed booking (final truth)
+* **BookingRequest** — Intent capture + idempotency
 
-#### Doctor
-* Belongs to Clinic.
-* Has Schedule.
-* Has many Appointments.
-
-#### Patient
-* Belongs to Clinic.
-* Has many Appointments.
-
-#### Appointment (CORE ENTITY)
-* Represents a confirmed booking.
-* **Responsibilities:**
-  * Stores final booked time.
-  * Represents truth of system state.
-  * *NOT* responsible for validation.
-
-#### BookingRequest (TEMPORARY / AUDIT ENTITY)
-* Represents:
-  * Incoming request from Vapi.
-  * Request tracking.
-  * Idempotency control.
-
-#### Schedule
-* Defines doctor availability rules:
-  * Working days
-  * Working hours
-  * Recurrence rules (simple weekly model)
+**For detailed field specifications, constraints, and relationships, see Section 15 (Data Model Specification).**
 
 ### 3.2 Explicitly Rejected Entities
-* ❌ Slot entity
-* ❌ Calendar entity
-* ❌ Pre-generated availability tables
+* ❌ Slot entity (schedule-based computation instead)
+* ❌ Calendar entity (no pre-generation)
+* ❌ Pre-generated availability tables (dynamic calculation)
 
 ---
 
-## 4. SCHEDULING MODEL
-
-### Approach
-* Schedule-based availability (**NOT** slot-based).
-
-### Schedule Structure
-* `working_days` (Mon–Sun enum list)
-* `start_time`
-* `end_time`
-
-### Availability Logic
-$$\text{Availability} = \text{Schedule} - \text{Existing Appointments}$$
-
-> ### Key Decision
-> * Availability is **computed dynamically, never stored**.
-
----
-
-## 5. CORE SYSTEM INVARIANT
+## 4. CORE SYSTEM INVARIANT
 
 ### PRIMARY RULE
 * **A doctor cannot have overlapping appointments.**
@@ -115,7 +76,7 @@ $$\text{Availability} = \text{Schedule} - \text{Existing Appointments}$$
 
 ---
 
-## 6. CONCURRENCY MODEL
+## 5. CONCURRENCY MODEL
 
 ### Strategy
 * **Optimistic concurrency** (speed-first system).
@@ -132,7 +93,7 @@ $$\text{Availability} = \text{Schedule} - \text{Existing Appointments}$$
 
 ---
 
-## 7. BOOKING FLOW (FINAL)
+## 6. BOOKING FLOW (FINAL)
 
 ```text
 Vapi
@@ -162,7 +123,7 @@ Vapi communicates result to user
 
 ---
 
-## 8. CONFLICT HANDLING STRATEGY
+## 7. CONFLICT HANDLING STRATEGY
 
 If booking fails due to conflict:
 
@@ -173,7 +134,7 @@ If booking fails due to conflict:
 
 ---
 
-## 9. PRODUCTION SAFETY MODEL
+## 8. PRODUCTION SAFETY MODEL
 
 ### 9.1 Idempotency (CRITICAL)
 
@@ -191,30 +152,8 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 10. DATABASE DESIGN STRATEGY
+## 9. API DESIGN (CURRENT STATE)
 
-### 10.1 Core Tables
-
-* `clinic`
-* `doctor`
-* `patient`
-* `schedule`
-* `appointment`
-* `booking_request`
-
-### 10.2 Appointment Constraint (CRITICAL)
-
-* **No overlapping appointments per doctor.** This is enforced strictly at the DB level.
-
-### 10.3 Design Philosophy
-
-* DB is final truth.
-* App layer does not “guarantee correctness”.
-* App layer only improves UX.
-
----
-
-## 11. API DESIGN (CURRENT STATE)
 
 ### 11.1 Health Check
 
@@ -260,7 +199,7 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 12. ARCHITECTURE LAYERS
+## 10. ARCHITECTURE LAYERS
 
 ### API Layer
 
@@ -296,7 +235,7 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 13. SYSTEM PHILOSOPHY (IMPORTANT)
+## 11. SYSTEM PHILOSOPHY (IMPORTANT)
 
 ### Core Principles
 
@@ -308,34 +247,326 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 14. FUTURE CONSIDERATIONS (NOT IMPLEMENTED YET)
+## 12. DATA MODEL SPECIFICATION (ADDED / COMPLETED)
 
-These are intentionally deferred:
-
-### 14.1 ScheduleException
-
-Possible future addition:
-
-* Doctor leave days
-* Holidays
-* Partial-day overrides
-
-> *Reason deferred:* Increases scheduling complexity significantly; not required for MVP.
-
-### 14.2 Slot System
-
-* **Rejected for now:** Would introduce unnecessary state management complexity; not needed for dynamic scheduling model.
-
-### 14.3 Multi-Clinic Scaling
-
-Future design direction:
-
-* Tenant isolation via `clinic_id`.
-* Same backend supports multiple clinics.
+This section defines the **exact structure of all persistent domain entities**.
 
 ---
 
-## 15. CURRENT DEVELOPMENT PHASE
+## 12.1 Clinic
+
+### Purpose
+
+Represents a tenant (medical practice boundary).
+
+---
+
+### Fields
+
+```
+clinic_id
+name
+created_at
+```
+
+---
+
+### Relationships
+
+- Has many Doctors
+- Has many Patients
+- Has many Appointments
+
+---
+
+### Notes
+
+- Minimal by design
+- No operational clinic metadata included (MVP scope)
+
+---
+
+## 12.2 Doctor
+
+### Purpose
+
+Represents a practitioner within a clinic.
+
+---
+
+### Fields
+
+```
+doctor_id
+clinic_id
+name
+specialty
+created_at
+```
+
+---
+
+### Relationships
+
+- Belongs to Clinic
+- Has many Appointments
+- Has multiple Schedule entries
+
+---
+
+### Notes
+
+- Schedule is NOT embedded here
+- Availability is derived via Schedule entity
+
+---
+
+## 12.3 Patient
+
+### Purpose
+
+Represents a client booking appointments.
+
+---
+
+### Fields
+
+```
+patient_id
+clinic_id
+name
+phone
+email
+created_at
+```
+
+---
+
+### Relationships
+
+- Belongs to Clinic
+- Has many Appointments
+
+---
+
+### Notes
+
+- Email included for future notifications
+- Phone is primary booking channel (voice-first system)
+
+---
+
+## 12.4 Schedule
+
+### Purpose
+
+Defines doctor availability rules.
+
+---
+
+### Fields
+
+```
+schedule_id
+doctor_id
+working_days
+start_time
+end_time
+```
+
+---
+
+### Relationships
+
+- Belongs to Doctor
+
+---
+
+### Critical Design Decision
+
+- A doctor can have **multiple schedule entries**
+- Each entry represents an independent time block
+
+Example:
+
+- Mon–Fri 08:00–12:00
+- Mon–Fri 13:00–17:00
+
+---
+
+### Notes
+
+- No slot generation
+- No calendar system
+- Availability computed dynamically
+
+---
+
+## 12.5 Appointment
+
+### Purpose
+
+Represents a confirmed booking outcome.
+
+---
+
+### Fields
+
+```
+appointment_id
+clinic_id
+doctor_id
+patient_id
+start_time
+end_time
+status
+created_at
+updated_at
+```
+
+---
+
+### Relationships
+
+- Belongs to Clinic
+- Belongs to Doctor
+- Belongs to Patient
+
+---
+
+### Status Values
+
+```
+CONFIRMED
+CANCELLED
+COMPLETED
+```
+
+---
+
+### Critical Rules
+
+- Appointment does NOT validate availability
+- Appointment does NOT enforce scheduling rules
+- Appointment is a final state record only
+
+---
+
+### Notes
+
+- Source of truth for booked time slots
+- DB constraint enforces no overlap per doctor
+
+---
+
+## 12.6 BookingRequest
+
+### Purpose
+
+Captures incoming booking intent from Vapi.
+
+---
+
+### Fields
+
+```
+booking_request_id
+idempotency_key
+clinic_id
+doctor_id
+patient_name
+phone
+email
+preferred_start_time
+preferred_end_time
+status
+created_at
+```
+
+---
+
+### Status Values
+
+```
+RECEIVED
+PROCESSING
+SUCCESS
+FAILED
+```
+
+---
+
+### Critical Role
+
+- Prevents duplicate bookings via idempotency
+- Tracks full lifecycle of voice-driven requests
+- Handles retries safely
+
+---
+
+### Relationship Behavior
+
+- May exist without an Appointment
+- Acts as the "intent layer" of the system
+
+---
+
+## 13. CORE DATA MODEL PRINCIPLES (UPDATED)
+
+---
+
+### 13.1 Separation of Concerns
+
+| Layer | Responsibility |
+|-------|----------------|
+| BookingRequest | Intent + idempotency |
+| Schedule | Availability rules |
+| Appointment | Final truth |
+| Database | Conflict enforcement |
+
+---
+
+### 13.2 No Slot System
+
+- No pre-generated slots
+- No calendar table
+- No availability cache
+
+---
+
+### 13.3 Schedule-Based Computation
+
+Availability is always:
+
+```
+Schedule - Existing Appointments
+```
+
+---
+
+### 13.4 Database is Final Authority
+
+- Prevents overlapping appointments
+- Handles concurrency correctness
+- Rejects invalid writes
+
+---
+
+## 14. ARCHITECTURE STATUS
+
+### COMPLETED
+
+- Domain Model
+- Data Model Specification
+- Scheduling Strategy
+- Booking Flow
+- Concurrency Model
+- API Design (initial)
+- System Boundaries
+
+---
+
+## 15. FUTURE CONSIDERATIONS & DEVELOPMENT PHASE
 
 ### Completed
 
