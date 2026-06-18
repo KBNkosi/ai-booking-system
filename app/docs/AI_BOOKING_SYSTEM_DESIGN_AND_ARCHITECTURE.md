@@ -1,5 +1,5 @@
 ```markdown
-# SYSTEM DESIGN & ARCHITECTURE — AI VOICE BOOKING SYSTEM (V2.0)
+# SYSTEM DESIGN & ARCHITECTURE — AI VOICE BOOKING SYSTEM (V3.1)
 
 ## 1. PRODUCT DEFINITION
 We are building a **voice-driven AI appointment booking system** for clinics using **Vapi + FastAPI + PostgreSQL**.
@@ -155,11 +155,11 @@ Prevents duplicate bookings caused by:
 ## 9. API DESIGN (CURRENT STATE)
 
 
-### 11.1 Health Check
+### 9.1 Health Check
 
 `GET /health`
 
-### 11.2 Booking Endpoint
+### 9.2 Booking Endpoint
 
 `POST /appointments/book`
 
@@ -199,7 +199,106 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 10. ARCHITECTURE LAYERS
+## 10. DATABASE DESIGN STRATEGY (UPDATED)
+
+### 10.1 Core Principle
+
+All primary entities use UUID as their primary key.
+
+---
+
+### 10.2 Why UUIDs
+
+* Prevents ID collision across distributed systems
+* Supports retry-heavy voice system (Vapi)
+* Safe for idempotent booking flows
+* Future-proof for multi-clinic SaaS scaling
+* Avoids predictable sequential IDs in public APIs
+
+---
+
+### 10.3 Identifier Standard (NEW RULE)
+
+All core entities **MUST use:**
+* **UUID PRIMARY KEY**
+
+---
+
+### 10.4 Core Tables (UPDATED)
+
+#### clinic
+* `clinic_id` (UUID PK)
+* `name`
+* `created_at`
+
+#### doctor
+* `doctor_id` (UUID PK)
+* `clinic_id` (UUID FK)
+* `name`
+* `specialty`
+* `created_at`
+
+#### patient
+* `patient_id` (UUID PK)
+* `clinic_id` (UUID FK)
+* `name`
+* `phone`
+* `email`
+* `created_at`
+
+#### schedule
+* `schedule_id` (UUID PK)
+* `doctor_id` (UUID FK)
+* `working_days`
+* `start_time`
+* `end_time`
+
+#### appointment
+* `appointment_id` (UUID PK)
+* `clinic_id` (UUID FK)
+* `doctor_id` (UUID FK)
+* `patient_id` (UUID FK)
+* `start_time`
+* `end_time`
+* `status`
+* `created_at`
+* `updated_at`
+
+#### booking_request
+* `booking_request_id` (UUID PK)
+* `idempotency_key` (string)
+* `clinic_id` (UUID FK)
+* `doctor_id` (UUID FK)
+* `patient_name`
+* `phone`
+* `email`
+* `preferred_start_time`
+* `preferred_end_time`
+* `status`
+* `created_at`
+
+---
+
+### 10.5 Indexing Note (IMPORTANT ADDITION)
+
+Even though UUIDs are used:
+* Indexes should still be applied on:
+  * `doctor_id`
+  * `clinic_id`
+  * `start_time` (appointments)
+  * `idempotency_key` (booking_request)
+
+---
+
+### 10.6 Appointment Constraint (UNCHANGED BUT REAFFIRMED)
+
+**No overlapping appointments per doctor is enforced at DB level.**
+
+UUID choice does NOT affect this rule.
+
+---
+
+## 11. ARCHITECTURE LAYERS
 
 ### API Layer
 
@@ -235,7 +334,7 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 11. SYSTEM PHILOSOPHY (IMPORTANT)
+## 12. SYSTEM PHILOSOPHY (IMPORTANT)
 
 ### Core Principles
 
@@ -247,13 +346,18 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 12. DATA MODEL SPECIFICATION (ADDED / COMPLETED)
+## 13. DATA MODEL SPECIFICATION (UPDATED TO UUID STANDARD)
 
 This section defines the **exact structure of all persistent domain entities**.
 
+### GLOBAL RULE
+
+**All entities now use:**
+* `entity_id` (UUID PRIMARY KEY)
+
 ---
 
-## 12.1 Clinic
+## 13.1 Clinic
 
 ### Purpose
 
@@ -264,7 +368,7 @@ Represents a tenant (medical practice boundary).
 ### Fields
 
 ```
-clinic_id
+clinic_id (UUID)
 name
 created_at
 ```
@@ -286,7 +390,7 @@ created_at
 
 ---
 
-## 12.2 Doctor
+## 13.2 Doctor
 
 ### Purpose
 
@@ -297,8 +401,8 @@ Represents a practitioner within a clinic.
 ### Fields
 
 ```
-doctor_id
-clinic_id
+doctor_id (UUID)
+clinic_id (UUID)
 name
 specialty
 created_at
@@ -321,7 +425,7 @@ created_at
 
 ---
 
-## 12.3 Patient
+## 13.3 Patient
 
 ### Purpose
 
@@ -332,8 +436,8 @@ Represents a client booking appointments.
 ### Fields
 
 ```
-patient_id
-clinic_id
+patient_id (UUID)
+clinic_id (UUID)
 name
 phone
 email
@@ -356,7 +460,7 @@ created_at
 
 ---
 
-## 12.4 Schedule
+## 13.4 Schedule
 
 ### Purpose
 
@@ -367,8 +471,8 @@ Defines doctor availability rules.
 ### Fields
 
 ```
-schedule_id
-doctor_id
+schedule_id (UUID)
+doctor_id (UUID)
 working_days
 start_time
 end_time
@@ -402,7 +506,7 @@ Example:
 
 ---
 
-## 12.5 Appointment
+## 13.5 Appointment
 
 ### Purpose
 
@@ -413,10 +517,10 @@ Represents a confirmed booking outcome.
 ### Fields
 
 ```
-appointment_id
-clinic_id
-doctor_id
-patient_id
+appointment_id (UUID)
+clinic_id (UUID)
+doctor_id (UUID)
+patient_id (UUID)
 start_time
 end_time
 status
@@ -459,7 +563,7 @@ COMPLETED
 
 ---
 
-## 12.6 BookingRequest
+## 13.6 BookingRequest
 
 ### Purpose
 
@@ -470,10 +574,10 @@ Captures incoming booking intent from Vapi.
 ### Fields
 
 ```
-booking_request_id
-idempotency_key
-clinic_id
-doctor_id
+booking_request_id (UUID)
+idempotency_key (string)
+clinic_id (UUID)
+doctor_id (UUID)
 patient_name
 phone
 email
@@ -511,11 +615,11 @@ FAILED
 
 ---
 
-## 13. CORE DATA MODEL PRINCIPLES (UPDATED)
+## 14. CORE DATA MODEL PRINCIPLES (UPDATED)
 
 ---
 
-### 13.1 Separation of Concerns
+### 14.1 Separation of Concerns
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -526,7 +630,7 @@ FAILED
 
 ---
 
-### 13.2 No Slot System
+### 14.2 No Slot System
 
 - No pre-generated slots
 - No calendar table
@@ -534,7 +638,7 @@ FAILED
 
 ---
 
-### 13.3 Schedule-Based Computation
+### 14.3 Schedule-Based Computation
 
 Availability is always:
 
@@ -544,7 +648,7 @@ Schedule - Existing Appointments
 
 ---
 
-### 13.4 Database is Final Authority
+### 14.4 Database is Final Authority
 
 - Prevents overlapping appointments
 - Handles concurrency correctness
@@ -552,7 +656,7 @@ Schedule - Existing Appointments
 
 ---
 
-## 14. ARCHITECTURE STATUS
+## 15. ARCHITECTURE STATUS
 
 ### COMPLETED
 
@@ -566,7 +670,7 @@ Schedule - Existing Appointments
 
 ---
 
-## 15. FUTURE CONSIDERATIONS & DEVELOPMENT PHASE
+## 16. FUTURE CONSIDERATIONS & DEVELOPMENT PHASE
 
 ### Completed
 
@@ -595,3 +699,4 @@ Focus:
 ```
 
 ```
+
