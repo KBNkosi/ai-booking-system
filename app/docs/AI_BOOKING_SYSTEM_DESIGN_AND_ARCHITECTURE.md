@@ -258,6 +258,7 @@ All core entities **MUST use:**
 * `clinic_id` (UUID FK)
 * `doctor_id` (UUID FK)
 * `patient_id` (UUID FK)
+* `date`
 * `start_time`
 * `end_time`
 * `status`
@@ -272,8 +273,9 @@ All core entities **MUST use:**
 * `patient_name`
 * `phone`
 * `email`
-* `preferred_start_time`
-* `preferred_end_time`
+* `requested_date`
+* `requested_start_time`
+* `requested_end_time`
 * `status`
 * `created_at`
 
