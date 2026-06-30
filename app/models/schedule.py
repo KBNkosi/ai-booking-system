@@ -1,7 +1,7 @@
 import uuid
 import datetime 
 from typing import List
-from sqlalchemy import Uuid, DateTime, func, ForeignKey
+from sqlalchemy import Uuid, DateTime, func, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 from typing import TYPE_CHECKING
@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 class Schedule(Base):
     __tablename__ = "schedules"
+    __table_args__ = (
+        Index("ix_schedules_doctor_id", "doctor_id"),
+    )
 
     schedule_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,

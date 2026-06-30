@@ -3,10 +3,11 @@ import datetime
 from sqlalchemy import Uuid, DateTime, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from .clinic import Clinic
+    from .appointment import Appointment
 
 class Patient(Base):
     __tablename__ = "patients"
@@ -18,6 +19,7 @@ class Patient(Base):
     )
     clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinics.clinic_id"), nullable=False)
     clinic: Mapped["Clinic"] = relationship(back_populates="patients")
+    appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient")
     name: Mapped[str] = mapped_column(nullable=False)
     email: Mapped[str] = mapped_column(nullable=True)
     phone: Mapped[str] = mapped_column(nullable=False)

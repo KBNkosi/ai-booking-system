@@ -1,7 +1,7 @@
 import uuid
 import datetime 
 from typing import List
-from sqlalchemy import Uuid, DateTime, func, ForeignKey
+from sqlalchemy import Uuid, DateTime, func, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 from typing import TYPE_CHECKING
@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 
 class Appointment(Base):
     __tablename__ = "appointments"
+    __table_args__ = (
+        Index("ix_appointments_doctor_id", "doctor_id"),
+        Index("ix_appointments_clinic_id", "clinic_id"),
+        Index("ix_appointments_start_time", "start_time"),
+    )
 
     appointment_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -25,7 +30,6 @@ class Appointment(Base):
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patients.patient_id"), nullable=False)
     patient: Mapped["Patient"] = relationship(back_populates="appointments")
-    date: Mapped[datetime.date] = mapped_column(nullable=False)
     start_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
     end_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)    

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from .clinic import Clinic
+    from .appointment import Appointment
     from .schedule import Schedule
     from .booking_request import BookingRequest
 
@@ -22,6 +23,7 @@ class Doctor(Base):
     clinic: Mapped["Clinic"] = relationship(back_populates="doctors")
     schedules: Mapped[List["Schedule"]] = relationship(back_populates="doctor")
     booking_requests: Mapped[List["BookingRequest"]] = relationship(back_populates="doctor")
+    appointments: Mapped[List["Appointment"]] = relationship(back_populates="doctor")
     name: Mapped[str] = mapped_column(nullable=False)
     specialty: Mapped[str] = mapped_column(nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
