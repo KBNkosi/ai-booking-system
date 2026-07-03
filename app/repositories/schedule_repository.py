@@ -8,7 +8,7 @@ from app.models.schedule import Schedule
 class ScheduleRepository:
     def __init__(self, db: Session):
         self.db = db
-
+    # Get schedules for a doctor
     def get_by_doctor(self, doctor_id: uuid.UUID) -> List[Schedule]:
         stmt = (
             select(Schedule)
@@ -18,6 +18,7 @@ class ScheduleRepository:
 
         return self.db.scalars(stmt).all()
 
+    # Get schedules for a doctor within a date range
     def get_for_date_range(self, doctor_id: uuid.UUID, start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> List[Schedule]:
         stmt = (
             select(Schedule)

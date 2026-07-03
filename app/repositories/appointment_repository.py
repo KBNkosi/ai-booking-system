@@ -16,6 +16,7 @@ class AppointmentRepository:
             
         return appointment
 
+    # Get appointments for a doctor within a date range
     def get_for_doctor_in_range(self, doctor_id: uuid.UUID, start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> List[Appointment]:
         stmt = (
             select(Appointment)
@@ -26,6 +27,7 @@ class AppointmentRepository:
 
         return self.db.scalars(stmt).all()
 
+    # Get appointments for a patient
     def get_for_patient(self, patient_id: uuid.UUID) -> List[Appointment]:
         stmt = (
             select(Appointment)
