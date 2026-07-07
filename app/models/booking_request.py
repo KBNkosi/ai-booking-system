@@ -22,13 +22,12 @@ class BookingRequest(Base):
     idempotency_key: Mapped[str] = mapped_column(nullable=False, unique=True)
     clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinics.clinic_id"), nullable=False)
     clinic: Mapped["Clinic"] = relationship(back_populates="booking_requests")
-    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctors.doctor_id"), nullable=True)
+    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctors.doctor_id"), nullable=False)
     doctor: Mapped["Doctor"] = relationship(back_populates="booking_requests")
     patient_name: Mapped[str] = mapped_column(nullable=False)
     patient_email: Mapped[Optional[str]] = mapped_column(nullable=True)
     patient_phone: Mapped[str] = mapped_column(nullable=False)
     requested_start_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
-    requested_end_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)
     appointment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("appointments.appointment_id"),
