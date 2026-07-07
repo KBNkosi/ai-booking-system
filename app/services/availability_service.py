@@ -32,9 +32,11 @@ class AvailabilityService:
     def check_availability(
         self,
         doctor_id: uuid.UUID,
-        requested_start: datetime.datetime,
-        requested_end: datetime.datetime
+        requested_start: datetime.datetime
     ) -> AvailabilityResult:
+       # Standardize duration to 30 minutes for the MVP
+        duration = datetime.timedelta(minutes=30)
+        requested_end = requested_start + duration
 
         # Get doctor schedules for the requested date range
         schedules = self.schedule_repository.get_for_date_range(
@@ -71,8 +73,7 @@ class AvailabilityService:
                 requested_end=requested_end
             )
 
-        # Calculate duration and find alternatives
-        duration = requested_end - requested_start
+        # find alternatives
         alternatives = self._find_alternative_slots(
             schedules, existing_appointments, duration
         )

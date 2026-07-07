@@ -11,12 +11,14 @@ from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.booking_request import BookingRequestRepository
 from app.repositories.doctor_repository import DoctorRepository
 
+
 @dataclass
 class BookingResult:
     status: str
     booking_request: BookingRequest
     appointment: Optional[Appointment] = None
     alternative_slots: List[tuple] = field(default_factory=list)
+
 
 class BookingService:
     def __init__(
@@ -32,59 +34,60 @@ class BookingService:
         self.appointment_repository = appointment_repository
         self.booking_request_repository = booking_request_repository
         self.doctor_repository = doctor_repository
-       
 
     def process_booking(
         self,
-        indempotency_key: str,
-        clinic_id:uuid.UUID,
+        idempotency_key: str,
+        clinic_id: uuid.UUID,
         doctor_id: uuid.UUID,
         patient_name: str,
-        patient_phone:str,
+        patient_phone: str,
         patient_email: Optional[str],
-        requested_start_time: datetime.datetime,
-        requested_end_time: datetime.datetime
+        requested_start_time: datetime.datetime
     ) -> BookingResult:
-      # 1. Indempotency Check: Check if this request has already been processed
-      existing_request = self.booking_request_repository.get_by_idempotency_key(indempotency_key)
-      if existing_request:
-        if existing_request.status == "SUCCESS":
-            # if success, retrieve the created appointment
-            appointment = None
-            if existing_request.appointment_id:
-                appointment = self.appointment_repository.get_by_id(existing_request.appointment_id)
-            return BookingResult(
-                status="SUCCESS",
-                booking_request=existing_request,
-                appointment=appointment
-            )
-        else:
-            return BookingResult(
-                status="FAILED",
-                booking_request=existing_request,
-                appointment=None
-            )
+        
+        # 1. Idempotency Check: Check if this request has already been processed
+        existing_request = self.booking_request_repository.get_by_idempotency_key(idempotency_key)
+        if existing_request:
+            if existing_request.status == "SUCCESS":
+                # Deterministic replay: retrieve the exact created appointment using appointment_id
+                appointment = None
+                if existing_request.appointment_id:
+                    appointment = self.appointment_repository.get_by_id(existing_request.appointment_id)
+                return BookingResult(
+                    status="SUCCESS",
+                    booking_request=existing_request,
+                    appointment=appointment
+                )
+            else:
+                return BookingResult(
+                    status="FAILED",
+                    booking_request=existing_request,
+                    appointment=None
+                )
 
-      # 2. Record the new BookingRequest intent
-      booking_request = BookingRequest(
-        indempotency_key=indempotency_key,
-        clinic_id=clinic_id,
-        doctor_id=doctor_id,
-        patient_name=patient_name,
-        patient_phone=patient_phone,
-        patient_email=patient_email,
-        requested_start_time=requested_start_time,
-        requested_end_time=requested_end_time,
-        status="RECEIVED"
-      )
-      booking_result = self.booking_request_repository.create(booking_request)
+        # Compute the fixed 30-minute end time
+        requested_end_time = requested_start_time + datetime.timedelta(minutes=30)
 
-      # Update status to indicate processing has started
-      self.booking_request_repository.update_status(booking_request.booking_request_id, "PROCESSING")
+        # 2. Record the new BookingRequest intent (no requested_end_time column in DB)
+        booking_request = BookingRequest(
+            idempotency_key=idempotency_key,
+            clinic_id=clinic_id,
+            doctor_id=doctor_id,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            patient_email=patient_email,
+            requested_start_time=requested_start_time,
+            status="RECEIVED"
+        )
+        booking_request = self.booking_request_repository.create(booking_request)
 
-       # 3. Resolve Doctor: verify doctor exists
-      doctor = self.doctor_repository.get_by_id(doctor_id)
-      if not doctor:
+        # Update status to indicate processing has started
+        self.booking_request_repository.update_status(booking_request.booking_request_id, "PROCESSING")
+
+        # 3. Resolve Doctor: verify doctor exists
+        doctor = self.doctor_repository.get_by_id(doctor_id)
+        if not doctor:
             self.booking_request_repository.update_status(booking_request.booking_request_id, "FAILED")
             booking_request.status = "FAILED"
             return BookingResult(
@@ -92,23 +95,24 @@ class BookingService:
                 booking_request=booking_request,
                 appointment=None
             )
-        
-        # 5. Check Availability
-      availability = self.availability_service.check_availability(
+
+        # 4. Check Availability (Only passes requested_start_time; end time computed inside)
+        availability = self.availability_service.check_availability(
             doctor_id=doctor_id,
-            requested_start=requested_start_time,
-            requested_end=requested_end_time
+            requested_start=requested_start_time
         )
-      if availability.is_available:
-        # 4. Resolve Patient Identity
-        patient = self.patient_resolution_service.resolve(
-            clinic_id=clinic_id,
-            name=patient_name,
-            phone=patient_phone,
-            email=patient_email
-        )   
+
+        if availability.is_available:
+            # 5. Resolve Patient Identity (Only resolved/created upon confirmed availability)
+            patient = self.patient_resolution_service.resolve(
+                clinic_id=clinic_id,
+                name=patient_name,
+                phone=patient_phone,
+                email=patient_email
+            )
+
             # 6. Create the Appointment
-        appointment = Appointment(
+            appointment = Appointment(
                 clinic_id=clinic_id,
                 doctor_id=doctor_id,
                 patient_id=patient.patient_id,
@@ -116,26 +120,27 @@ class BookingService:
                 end_time=requested_end_time,
                 status="CONFIRMED"
             )
-        created_appointment = self.appointment_repository.create(appointment)
+            created_appointment = self.appointment_repository.create(appointment)
 
-            # Associate Appointment 
-        self.booking_request_repository.associate_appointment(
-            booking_request.booking_request_id,
-            created_appointment.appointment_id
+            # 7. Associate Appointment and update BookingRequest status to SUCCESS
+            self.booking_request_repository.associate_appointment(
+                booking_request.booking_request_id,
+                created_appointment.appointment_id
             )
-            
-            # Update BookingRequest to SUCCESS
-        self.booking_request_repository.update_status(booking_request.booking_request_id, "SUCCESS")
-        booking_request.status = "SUCCESS"
-        return BookingResult(
-            status="SUCCESS",
-            booking_request=booking_request,
-            appointment=created_appointment
+            self.booking_request_repository.update_status(booking_request.booking_request_id, "SUCCESS")
+            booking_request.status = "SUCCESS"
+            booking_request.appointment_id = created_appointment.appointment_id
+
+            return BookingResult(
+                status="SUCCESS",
+                booking_request=booking_request,
+                appointment=created_appointment
             )
-      else:
+        else:
             # Update BookingRequest to FAILED
             self.booking_request_repository.update_status(booking_request.booking_request_id, "FAILED")
             booking_request.status = "FAILED"
+
             return BookingResult(
                 status="FAILED",
                 booking_request=booking_request,
