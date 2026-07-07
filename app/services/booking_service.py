@@ -50,10 +50,9 @@ class BookingService:
       if existing_request:
         if existing_request.status == "SUCCESS":
             # if success, retrieve the created appointment
-            appointments = self.appointment_repository.get_for_doctor_in_range(
-                doctor_id, requested_start_time, requested_end_time
-            )
-            appointment = appointments[0] if appointments else None
+            appointment = None
+            if existing_request.appointment_id:
+                appointment = self.appointment_repository.get_by_id(existing_request.appointment_id)
             return BookingResult(
                 status="SUCCESS",
                 booking_request=existing_request,
@@ -74,7 +73,6 @@ class BookingService:
         patient_name=patient_name,
         patient_phone=patient_phone,
         patient_email=patient_email,
-        requested_date=requested_start_time.date(),
         requested_start_time=requested_start_time,
         requested_end_time=requested_end_time,
         status="RECEIVED"
@@ -94,13 +92,7 @@ class BookingService:
                 booking_request=booking_request,
                 appointment=None
             )
-        # 4. Resolve Patient Identity
-      patient = self.patient_resolution_service.resolve(
-            clinic_id=clinic_id,
-            name=patient_name,
-            phone=patient_phone,
-            email=patient_email
-        )
+        
         # 5. Check Availability
       availability = self.availability_service.check_availability(
             doctor_id=doctor_id,
@@ -108,8 +100,15 @@ class BookingService:
             requested_end=requested_end_time
         )
       if availability.is_available:
+        # 4. Resolve Patient Identity
+        patient = self.patient_resolution_service.resolve(
+            clinic_id=clinic_id,
+            name=patient_name,
+            phone=patient_phone,
+            email=patient_email
+        )   
             # 6. Create the Appointment
-            appointment = Appointment(
+        appointment = Appointment(
                 clinic_id=clinic_id,
                 doctor_id=doctor_id,
                 patient_id=patient.patient_id,
@@ -117,14 +116,21 @@ class BookingService:
                 end_time=requested_end_time,
                 status="CONFIRMED"
             )
-            created_appointment = self.appointment_repository.create(appointment)
+        created_appointment = self.appointment_repository.create(appointment)
+
+            # Associate Appointment 
+        self.booking_request_repository.associate_appointment(
+            booking_request.booking_request_id,
+            created_appointment.appointment_id
+            )
+            
             # Update BookingRequest to SUCCESS
-            self.booking_request_repository.update_status(booking_request.booking_request_id, "SUCCESS")
-            booking_request.status = "SUCCESS"
-            return BookingResult(
-                status="SUCCESS",
-                booking_request=booking_request,
-                appointment=created_appointment
+        self.booking_request_repository.update_status(booking_request.booking_request_id, "SUCCESS")
+        booking_request.status = "SUCCESS"
+        return BookingResult(
+            status="SUCCESS",
+            booking_request=booking_request,
+            appointment=created_appointment
             )
       else:
             # Update BookingRequest to FAILED

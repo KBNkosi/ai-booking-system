@@ -27,6 +27,14 @@ class BookingRequestRepository:
         )
         return self.db.scalars(stmt).first()
 
+    def associate_appointment(self, request_id: uuid.UUID, appointment_id: uuid.UUID) -> Optional[BookingRequest]:
+        booking_request = self.db.get(BookingRequest, request_id)
+        if not booking_request:
+            return None
+        booking_request.appointment_id = appointment_id
+        self.db.flush()
+        return booking_request
+
     def update_status(self, request_id: uuid.UUID, status: str) -> Optional[BookingRequest]:
         booking_request = self.db.get(BookingRequest, request_id)
         if not booking_request:

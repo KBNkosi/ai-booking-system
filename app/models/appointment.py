@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .clinic import Clinic
     from .doctor import Doctor
     from .patient import Patient
+    from .booking_request import BookingRequest
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -30,6 +31,7 @@ class Appointment(Base):
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patients.patient_id"), nullable=False)
     patient: Mapped["Patient"] = relationship(back_populates="appointments")
+    booking_request: Mapped[List["BookingRequest"]] = relationship(back_populates="appointment")
     start_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
     end_time: Mapped[datetime.datetime] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)    
