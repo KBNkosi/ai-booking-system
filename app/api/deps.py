@@ -9,6 +9,7 @@ from app.repositories.booking_request import BookingRequestRepository
 from app.repositories.doctor_repository import DoctorRepository
 from app.repositories.patient_repository import PatientRepository
 from app.repositories.schedule_repository import ScheduleRepository
+from app.repositories.clinic_repository import ClinicRepository
 from app.services.availability_service import AvailabilityService
 from app.services.booking_service import BookingService
 from app.services.patient_resolution_service import PatientResolutionService
@@ -54,3 +55,14 @@ def get_booking_service(
         booking_request_repository=booking_request_repository,
         doctor_repository=doctor_repository,
     )
+
+def get_clinic_repository(db: Session = Depends(get_db)) -> ClinicRepository:
+    return ClinicRepository(db)
+
+def get_booking_request_repository(
+    db: Session = Depends(get_db),
+) -> BookingRequestRepository:
+    return BookingRequestRepository(db)
+
+def get_doctor_repository(db: Session = Depends(get_db)) -> DoctorRepository:
+    return DoctorRepository(db)
