@@ -60,7 +60,7 @@ def create_booking(
         requested_start_time=body.requested_start_time,
     )
 
-    if result.status == "FAILED" and response.status_code == status.HTTP_201_CREATED:
+    if result.status == "FAILED":
         response.status_code = status.HTTP_409_CONFLICT
 
     return booking_response(result)
