@@ -2,9 +2,9 @@
 
 An appointment booking platform designed to automate scheduling workflows for clinics and other appointment-based businesses.
 
-The system enables patients to book appointments through a conversational interface while automatically handling patient identification, doctor lookup, availability validation, conflict detection, and appointment creation.
+The system enables patients to book appointments through a conversational interface (Vapi AI voice agent) while automatically handling patient identification, doctor lookup, availability validation, conflict detection, and appointment creation.
 
-Rather than relying on manual scheduling processes, the platform is designed to streamline booking operations and reduce administrative effort through structured business workflows and automation.
+Rather than relying on manual scheduling processes, the platform streamlines booking operations and reduces administrative effort through structured business workflows and automation.
 
 ---
 
@@ -25,29 +25,32 @@ As appointment volumes grow, these processes become time-consuming, error-prone,
 
 ## 💡 The Solution
 
-This platform automates the appointment booking workflow from request to confirmation.
+This platform automates the appointment booking workflow from voice request to confirmation.
 
-Patients interact with an AI-powered assistant that captures booking intent and submits structured booking requests to the backend platform.
+Patients interact with a **Vapi AI voice assistant** that captures booking intent and invokes backend tools via a dedicated webhook API.
 
 The backend then:
-1. Identifies or creates the patient record
-2. Resolves the requested practitioner
-3. Calculates real-time availability
-4. Detects scheduling conflicts
-5. Creates confirmed appointments
-6. Suggests alternative times when conflicts occur
+1. Resolves doctor availability dynamically in real time
+2. Calculates free 30-minute schedule windows
+3. Detects scheduling conflicts
+4. Identifies existing patients or conditionally creates new patient records upon availability confirmation
+5. Creates confirmed appointments atomically
+6. Suggests alternative time slots when requested times are unavailable
 
-The result is a booking experience that reduces administrative overhead while maintaining scheduling accuracy.
+The result is a low-latency booking experience that reduces administrative overhead while maintaining scheduling accuracy.
 
 ---
 
 ## 🌟 Key Capabilities
 
+### 🗣️ Voice AI Integration (Vapi)
+A dedicated `POST /vapi/webhook` adapter routes tool-call requests (`list_doctors`, `check_availability`, `create_booking`) seamlessly from live phone calls to backend services.
+
 ### 📅 Appointment Scheduling
 Create appointments through automated workflows that validate availability before confirmation.
 
 ### 🔍 Patient Resolution
-Identify existing patients using phone numbers or create new patient records when necessary.
+Identify existing patients using clinic ID + phone number, or create new patient records conditionally after availability is confirmed.
 
 ### 🩺 Doctor Resolution
 Locate providers by clinic, specialty, or identifier.
@@ -65,7 +68,7 @@ No pre-generated booking slots are required.
 The platform prevents overlapping appointments and provides alternative scheduling options when conflicts occur.
 
 ### 🔄 Idempotent Request Processing
-Duplicate booking requests are safely detected and ignored, preventing accidental double bookings caused by retries or network interruptions.
+Duplicate booking requests are safely detected and ignored using unique `Idempotency-Key` headers (or Vapi `call.id`), preventing accidental double bookings.
 
 ### 🔮 Alternative Appointment Suggestions
 When a requested time is unavailable, the system generates alternative booking options for the patient.
@@ -75,31 +78,28 @@ When a requested time is unavailable, the system generates alternative booking o
 ## 🔄 System Workflow
 
 ```text
-Patient
+Patient (Phone Call)
    │
    ▼
-AI Assistant
+Vapi AI Voice Assistant
    │
    ▼
-Booking API
+POST /vapi/webhook  <──>  REST Endpoints (/clinics/{id}/...)
    │
    ▼
-Patient Resolution
+Doctor Resolution (DoctorRepository)
    │
    ▼
-Doctor Resolution
+Availability Validation (AvailabilityService)
    │
    ▼
-Availability Validation
+Conditional Patient Resolution (PatientResolutionService)
    │
    ▼
-Conflict Detection
+Appointment Creation & DB Constraint Guard
    │
    ▼
-Appointment Creation
-   │
-   ▼
-Confirmation Response
+Structured Confirmation & Alternative Suggestions
 ```
 
 ---
@@ -107,20 +107,21 @@ Confirmation Response
 ## 🛠️ Technology Stack
 
 ### ⚙️ Backend
-* Python
+* Python 3.13+
 * FastAPI
 
 ### 🗄️ Database
-* PostgreSQL
+* PostgreSQL (Production)
+* SQLite in-memory with StaticPool (Isolated Unit & Integration Testing)
 
 ### 🗺️ Data Access
-* SQLAlchemy 2.0
+* SQLAlchemy 2.0 (ORM & Core)
 
 ### 🚀 Database Migrations
 * Alembic
 
-### 🧠 AI Integration
-* Vapi (planned)
+### 🧠 AI Voice Integration
+* Vapi AI (vapi.ai) Function Calling & Webhooks
 
 ### 📦 Package Management
 * uv
@@ -133,61 +134,49 @@ The platform follows a layered architecture where each layer has a clearly defin
 
 ```text
 app/
+├── api/
+│   ├── deps.py              # Dependency injection & wired services
+│   ├── mappers/             # Response mappers
+│   └── routers/
+│       ├── availability.py  # GET /doctors/{id}/availability
+│       ├── bookings.py      # POST /bookings
+│       ├── doctors.py       # GET /doctors
+│       └── vapi.py          # POST /vapi/webhook (AI Tool Webhook)
 ├── core/
-├── models/
-├── repositories/
-├── schemas/
-├── docs/
-└── main.py
+│   ├── config.py
+│   └── db.py
+├── models/                  # SQLAlchemy domain entities
+├── repositories/            # Data access & persistence
+├── schemas/                 # Pydantic DTOs & validation
+├── services/                # Business logic & orchestration
+└── main.py                  # FastAPI application entrypoint
 ```
-
-### 📋 Layer Responsibilities
-
-| Layer            | Responsibility                               |
-| ---------------- | -------------------------------------------- |
-| API Layer        | Request handling and validation              |
-| Service Layer    | Booking orchestration and business workflows |
-| Repository Layer | Data access and persistence                  |
-| Domain Layer     | Business rules and domain models             |
-| Core Layer       | Configuration and shared infrastructure      |
-
-This separation helps keep business logic independent from database and API concerns.
 
 ---
 
 ## 🧩 Domain Model
 
-The platform is built around six primary entities:
+The platform is built around six primary entities (all using UUID primary keys):
 
-### 🏢 Clinic
-Represents the organizational boundary for providers and patients.
-
-### 🧑‍⚕️ Doctor
-Healthcare practitioner with one or more availability schedules.
-
-### 👤 Patient
-Individual receiving care and requesting appointments.
-
-### 🗓️ Schedule
-Defines provider working hours and availability windows.
-
-### 📝 Appointment
-Represents a confirmed booking.
-
-### 📥 Booking Request
-Captures incoming scheduling intent before appointment creation.
-
-This separation provides traceability, supports retry-safe operations, and simplifies workflow management.
+* **🏢 Clinic**: Organizational boundary for providers and patients.
+* **🧑‍⚕️ Doctor**: Healthcare practitioner with one or more availability schedules.
+* **👤 Patient**: Individual receiving care and requesting appointments.
+* **🗓️ Schedule**: Defines provider working hours and availability windows.
+* **📝 Appointment**: Represents a confirmed booking (final state).
+* **📥 BookingRequest**: Captures incoming scheduling intent before appointment creation (idempotency layer).
 
 ---
 
 ## ⚡ Key Design Decisions
 
+### 🤖 Dedicated Vapi Webhook Adapter (`POST /vapi/webhook`)
+Rather than forcing individual REST routes on the voice AI, a unified Vapi webhook adapter unwraps tool-call payloads (`list_doctors`, `check_availability`, `create_booking`), extracts arguments, auto-injects `Idempotency-Key` headers using Vapi `call.id`, and formats results for the voice assistant.
+
 ### 🔄 Dynamic Availability
-Availability is calculated on demand rather than stored as pre-generated booking slots. This reduces duplicated state and simplifies schedule management.
+Availability is calculated on demand rather than stored as pre-generated booking slots (`Schedule - Appointments`).
 
 ### 🔀 Booking Requests and Appointments Are Separate
-A booking request represents intent. An appointment represents a confirmed booking. Separating these concerns provides better auditability and safer processing.
+A booking request represents intent. An appointment represents a confirmed booking.
 
 ### 🔒 Database-Enforced Scheduling Integrity
 The database serves as the final authority for preventing overlapping appointments. Application-level validation improves user experience, while database constraints provide concurrency-safe protection.
@@ -195,37 +184,36 @@ The database serves as the final authority for preventing overlapping appointmen
 ### 🆔 UUID-Based Identifiers
 All primary entities use UUIDs to support distributed workflows and prevent predictable public identifiers.
 
+### 👤 Conditional Patient Creation
+Patients are resolved/created only AFTER doctor availability is confirmed, preventing orphan patient records on failed booking attempts.
+
 ---
 
-## 🚀 Production Considerations
+## 🚀 Production Safety & Status Codes
 
 ### 🔑 Idempotency
-Every booking request includes an idempotency key. Repeated requests return the original result rather than creating duplicate appointments.
+Every booking request includes an idempotency key. Repeated successful requests return `200 OK` with the original appointment details.
 
-### 🚧 Conflict Handling
-When a scheduling conflict occurs:
-1. The booking is rejected.
-2. Alternative available times are generated.
-3. Suggestions are returned immediately.
-
-This approach supports responsive conversational booking experiences.
+### 🚧 Business Failure Mapping
+When a booking fails due to an unavailable slot or missing schedule:
+- Endpoint returns `409 Conflict`.
+- Response body contains `"status": "FAILED"` and `alternative_slots`.
+- No `Patient` or `Appointment` rows are created.
 
 ---
 
 ## 📈 Project Status
 
-### 📊 Current Progress
-
-| Phase                              | Status         |
-| ---------------------------------- | -------------- |
-| Foundation & Configuration         | ✅ Complete     |
-| Domain Modeling                    | ✅ Complete     |
-| Database Design & Migrations       | ✅ Complete     |
-| Business Rules & Scheduling Design | ✅ Complete     |
-| Repository Layer                   | ✅ Complete     |
-| Service Layer                      | ✅ Complete     |
-| API Endpoints                      | ✅ Complete     |
-| AI Integration                     | 🚧 In Progress |
+| Phase                              | Status      |
+| ---------------------------------- | ----------- |
+| Foundation & Configuration         | ✅ Complete  |
+| Domain Modeling                    | ✅ Complete  |
+| Database Design & Migrations       | ✅ Complete  |
+| Business Rules & Scheduling Design | ✅ Complete  |
+| Repository Layer                   | ✅ Complete  |
+| Service Layer                      | ✅ Complete  |
+| API Endpoints                      | ✅ Complete  |
+| AI Voice Integration (Vapi)        | ✅ Complete  |
 
 ---
 
@@ -233,7 +221,7 @@ This approach supports responsive conversational booking experiences.
 
 ### 📋 Prerequisites
 * Python 3.13+
-* PostgreSQL
+* PostgreSQL (or SQLite for development)
 * uv
 
 ### 💻 Installation
@@ -241,57 +229,45 @@ This approach supports responsive conversational booking experiences.
 Clone the repository:
 ```bash
 git clone <repository-url>
-cd ai-booking-platform
+cd ai-booking-project
 ```
 
-Install dependencies:
+Activate virtual environment & sync dependencies:
 ```bash
+source .venv/Scripts/activate  # On Windows Git Bash
 uv sync
 ```
-
-Configure environment variables:
-```bash
-cp .env.example .env
-```
-Update the database connection settings in the `.env` file.
 
 Run migrations:
 ```bash
 alembic upgrade head
 ```
 
-Start the development server:
+Run unit & integration test suite (48 tests):
 ```bash
-uvicorn app.main:app --reload
+pytest
 ```
+
+Start development server:
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Expose via ngrok for Vapi AI Webhook integration:
+```bash
+ngrok http 8000
+```
+Then configure `https://<your-ngrok-domain>/vapi/webhook` in your Vapi Dashboard.
 
 ---
 
 ## 📄 Documentation
 
-Detailed design and architecture documents can be found in:
-```text
-app/docs/
-```
-
-Including:
-* System Architecture
-* Domain Design
-* Scheduling Policies
-* Business Rules
-* Architectural Decisions
-
----
-
-## 🔮 Future Enhancements
-
-* Appointment rescheduling
-* Appointment cancellation workflows
-* Multi-channel booking support
-* Provider calendar integrations
-* Notifications and reminders 🔔
-* Administrative dashboard 📊
-* Reporting and analytics 📈
+Detailed design and architecture documents can be found in `app/docs/`:
+* `AI_BOOKING_SYSTEM_DESIGN_AND_ARCHITECTURE.md`
+* `SYSTEM_BEHAVIOUR_DESIGN.md`
+* `BUSINESS_RULES_&_SCHEDULING_POLICY.md`
+* `AI_Booking_SYSTEM_DECISIONS_LOG.md`
 
 ---
 

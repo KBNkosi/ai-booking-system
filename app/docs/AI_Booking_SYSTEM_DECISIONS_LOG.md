@@ -122,3 +122,38 @@ Not included in the MVP.
 * Increases scheduling complexity significantly.
 * Not required for core booking functionality.
 * Can be layered in later without breaking the core data model.
+
+---
+
+## 8. Dedicated Vapi Webhook Adapter Endpoint (`POST /vapi/webhook`)
+
+### Decision
+We created a dedicated webhook router endpoint (`POST /vapi/webhook`) to handle Vapi AI function calls (`list_doctors`, `check_availability`, `create_booking`), rather than pointing Vapi custom tools directly to raw domain REST routes.
+
+### Why
+* Unwraps Vapi's `tool-calls` payload structure seamlessly.
+* Auto-derives `Idempotency-Key` headers using Vapi `call_id` (`vapi-<call_id>`), guaranteeing safe retries during voice calls.
+* Converts service dataclass outputs directly into Vapi's expected `toolCallId` response schema.
+* Keeps core API domain routes clean while offering a dedicated adapter for voice integrations.
+
+---
+
+## 9. HTTP Status 409 Conflict for Business Logic Failures
+
+### Decision
+When a booking request cannot be fulfilled (e.g. slot unavailable or doctor has no schedule), the API returns **HTTP 409 Conflict** with `"status": "FAILED"` and `alternative_slots` in the response payload.
+
+### Why
+* Cleanly distinguishes business logic conflicts (slot taken / no schedule) from `201 Created` (new booking) and `200 OK` (idempotent replay).
+* Adheres to REST standards and explicit integration contract assertions.
+
+---
+
+## 10. Conditional Patient Identity Resolution
+
+### Decision
+Patients are only resolved or created by `PatientResolutionService` **after** `AvailabilityService` confirms doctor slot availability.
+
+### Why
+* Prevents creating orphan `Patient` rows when a booking request fails due to slot unavailability.
+* Ensures database cleanliness and accurate patient accounting.

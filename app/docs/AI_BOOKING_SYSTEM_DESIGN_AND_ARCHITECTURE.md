@@ -152,50 +152,64 @@ Prevents duplicate bookings caused by:
 
 ---
 
-## 9. API DESIGN (CURRENT STATE)
-
+## 9. API DESIGN (FINAL IMPLEMENTED STATE)
 
 ### 9.1 Health Check
-
 `GET /health`
 
-### 9.2 Booking Endpoint
+### 9.2 Doctor Discovery Endpoint
+`GET /clinics/{clinic_id}/doctors`
 
-`POST /appointments/book`
+### 9.3 Availability Pre-Check Endpoint
+`GET /clinics/{clinic_id}/doctors/{doctor_id}/availability?requested_start_time=ISO8601`
+
+### 9.4 Booking Endpoint
+`POST /clinics/{clinic_id}/bookings`
+Header: `Idempotency-Key: <string>`
 
 #### Request
-
 ```json
 {
-  "patient_name": "string",
-  "phone": "string",
-  "doctor_id": 1,
-  "preferred_start_time": "datetime",
-  "preferred_end_time": "datetime"
+  "doctor_id": "UUID",
+  "patient_name": "Jane Doe",
+  "patient_phone": "+15551234567",
+  "patient_email": "jane@example.com",
+  "requested_start_time": "2025-06-01T09:00:00"
 }
-
 ```
 
-#### Response (Success)
-
+#### Response (Success - 201 Created / 200 OK Replay)
 ```json
 {
-  "status": "CONFIRMED",
-  "appointment_id": 123
+  "status": "SUCCESS",
+  "booking_request": { ... },
+  "appointment": {
+    "appointment_id": "UUID",
+    "clinic_id": "UUID",
+    "doctor_id": "UUID",
+    "patient_id": "UUID",
+    "start_time": "2025-06-01T09:00:00",
+    "end_time": "2025-06-01T09:30:00",
+    "status": "CONFIRMED"
+  }
 }
-
 ```
 
-#### Response (Failure)
-
+#### Response (Failure - 409 Conflict)
 ```json
 {
   "status": "FAILED",
-  "reason": "SLOT_TAKEN",
-  "suggestions": []
+  "booking_request": { ... },
+  "appointment": null,
+  "alternative_slots": [
+    { "start_time": "...", "end_time": "..." }
+  ]
 }
-
 ```
+
+### 9.5 Vapi Voice AI Webhook Endpoint
+`POST /vapi/webhook`
+Handles Vapi AI `tool-calls` messages for `list_doctors`, `check_availability`, and `create_booking`. Auto-derives idempotency key from Vapi `call.id`.
 
 ---
 
@@ -661,44 +675,26 @@ Schedule - Existing Appointments
 ## 15. ARCHITECTURE STATUS
 
 ### COMPLETED
-
-- Domain Model
-- Data Model Specification
-- Scheduling Strategy
-- Booking Flow
-- Concurrency Model
-- API Design (initial)
-- System Boundaries
+- Domain Model & Entity Definitions (UUID Keys)
+- Data Model Specification & Constraints
+- Dynamic Schedule Computation Strategy
+- Booking Flow & Idempotency Layer
+- Concurrency Model (Optimistic + DB Level Constraints)
+- FastAPI REST Layer (`/bookings`, `/availability`, `/doctors`)
+- Vapi AI Voice Agent Webhook Router (`POST /vapi/webhook`)
+- Comprehensive Test Suite (48 unit and integration tests passing)
 
 ---
 
-## 16. FUTURE CONSIDERATIONS & DEVELOPMENT PHASE
+## 16. DEVELOPMENT PHASE & COMPLETED MILESTONES
 
-### Completed
-
-* Product definition
-* System architecture
-* Domain modeling
-* Scheduling model
-* Concurrency strategy
-* Booking flow design
-* API contracts (initial)
-* Production safety design
-
-### Next Phase (ACTIVE)
-
-**IMPLEMENTATION START**
-
-Focus:
-
-* Project structure (done)
-* Core infrastructure (db + config)
-* SQLAlchemy models
-* Repository layer
-* Booking service implementation
-* API endpoint integration
-
-```
-
-```
+### Completed Milestones
+* Product definition & System Architecture
+* Domain & Data Modeling (SQLAlchemy 2.0 + Alembic)
+* Repository Layer & Service Layer Architecture
+* Dynamic Availability Engine
+* Idempotent Booking Service & Conditional Patient Resolution
+* FastAPI Endpoint Layer & Mappers
+* Vapi AI Function Calling & Webhook Adapter (`POST /vapi/webhook`)
+* Test Suite (48 unit and integration tests passing)
 
