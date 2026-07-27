@@ -92,7 +92,10 @@ def vapi_webhook(
                     result_content = {"error": "doctor_id and requested_start_time are required"}
                 else:
                     doctor_id = UUID(doctor_id_str)
-                    start_time = _parse_datetime(start_time_str)
+                    if start_time_str is None:
+                        result_content = {"error": "requested_start_time is required"}
+                    else:
+                        start_time = _parse_datetime(start_time_str)
 
                     if clinic_id_str:
                         clinic_id = UUID(clinic_id_str)
@@ -134,9 +137,18 @@ def vapi_webhook(
                         "error": "clinic_id, doctor_id, patient_name, patient_phone, and requested_start_time are required"
                     }
                 else:
+                    # At this point required fields are present (truthy),
+                    # cast to expected types to satisfy static type checkers.
                     clinic_id = UUID(clinic_id_str)
                     doctor_id = UUID(doctor_id_str)
-                    start_time = _parse_datetime(start_time_str)
+                    # patient_name/phone/email came from args and were checked above
+                    patient_name = str(patient_name)
+                    patient_phone = str(patient_phone)
+                    patient_email = str(patient_email) if patient_email is not None else ""
+                    if start_time_str is None:
+                        result_content = {"error": "requested_start_time is required"}
+                    else:
+                        start_time = _parse_datetime(start_time_str)
 
                     clinic = clinic_repository.get_by_id(clinic_id)
                     if clinic is None:
