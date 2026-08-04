@@ -22,9 +22,24 @@ router = APIRouter(prefix="/vapi")
 
 def _parse_datetime(val: str) -> datetime.datetime:
     if isinstance(val, datetime.datetime):
-        return val
-    cleaned = str(val).replace("Z", "+00:00")
-    return datetime.datetime.fromisoformat(cleaned)
+        dt = val
+    else:
+        cleaned = str(val).replace("Z", "+00:00")
+        dt = datetime.datetime.fromisoformat(cleaned)
+
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(datetime.timezone.utc)
+        dt = datetime.datetime(
+            dt.year,
+            dt.month,
+            dt.day,
+            dt.hour,
+            dt.minute,
+            dt.second,
+            dt.microsecond,
+        )
+
+    return dt
 
 
 @router.post("/webhook")
