@@ -6,6 +6,8 @@ The system enables patients to book appointments through a conversational interf
 
 Rather than relying on manual scheduling processes, the platform streamlines booking operations and reduces administrative effort through structured business workflows and automation.
 
+[GitHub Repository](https://github.com/KBNkosi/ai-booking-system.git) • [Live Demo](https://youtu.be/SKPvAFXAOqU)
+
 ---
 
 ## ❓ The Problem
