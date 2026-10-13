@@ -265,6 +265,9 @@ Then configure `https://<your-ngrok-domain>/vapi/webhook` in your Vapi Dashboard
 
 ## 📄 Documentation
 
+Self-directed backend engineering curriculum (uses this repo as the lab):
+* [`CURRICULUM.md`](CURRICULUM.md)
+
 Detailed design and architecture documents can be found in `app/docs/`:
 * `AI_BOOKING_SYSTEM_DESIGN_AND_ARCHITECTURE.md`
 * `SYSTEM_BEHAVIOUR_DESIGN.md`
